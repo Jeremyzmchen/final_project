@@ -62,9 +62,12 @@ class GameplayState:
         self.drag_offset = (0, 0)  # prevent items from drifting
         self.hovered_item = None  # for tooltip
         self.font_small = pygame.font.Font(FONT_PATH, 24)
+
         self.call_police_btn = Button(1430, 570, 130, 70,
-            "Call Police", None, style='danger', font_size=27
+                                      "Call Police", None, style='danger', font_size=27
         )
+        self.menu_btn = Button(1430, 835, 130, 50,
+                               "BACK", None, style='transparent', font_size=42)
 
         # 5. Initialize sound effect
         self.sfx_money = None
@@ -129,6 +132,7 @@ class GameplayState:
         """
         mouse = pygame.mouse.get_pos()
         self.call_police_btn.update(mouse)
+        self.menu_btn.update(mouse)
 
         # Calculate the offset to prevent drift
         if event.type == pygame.MOUSEMOTION and self.dragging_item:
@@ -138,6 +142,12 @@ class GameplayState:
 
         # 1. Click
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Check if player wants to back to menu
+            if self.menu_btn.handle_click(mouse):
+                from game.game_manager import GameState
+                self.game_manager.change_state(GameState.MENU)
+                return
+
             # -1.1. First handle: click 'call police' button
             if self.call_police_btn.handle_click(mouse):
                 self.sfx_click.play()
@@ -277,6 +287,7 @@ class GameplayState:
 
         # 4. Render UI
         self.call_police_btn.render(screen)     # call_police
+        self.menu_btn.render(screen)            # back to menu
         for p in self.popups: p.render(screen)  # popups info
         self.hud.render(screen, self.money, self.shift_time, self.shift_duration)   # hud
         # Label: If dragging, scale img of items
