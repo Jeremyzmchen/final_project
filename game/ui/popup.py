@@ -2,24 +2,25 @@
 游戏UI - 浮动文字/飘字效果
 """
 import pygame
-from config.settings import COLOR_GREEN, COLOR_RED, COLOR_WHITE
+# TODO 12.05修改替换
+from config.settings import *
 
 
 class FloatingText:
     def __init__(self, x, y, text, color=COLOR_WHITE, duration=1.0):
         self.x = x
-        self.y = y
+        self.y = y - 60 # TODO 12.05修改替换
         self.text = text
         self.color = color
         self.duration = duration
         self.timer = 0
-        self.font = pygame.font.Font(None, 36)
+        self.font = pygame.font.Font(FONT_PATH, 36) # TODO 12.05修改替换
         self.alpha = 255
 
     def update(self, dt):
         self.timer += dt
         # 向上飘动
-        self.y -= 30 * dt
+        self.y -= 80 * dt   # TODO 12.05修改替换
 
         # 淡出效果
         if self.timer > self.duration * 0.5:
