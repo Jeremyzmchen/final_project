@@ -1,36 +1,45 @@
+"""
+Game Entity - Sticky Note (Item)
+A simple case note that carries case info (clue).
+Used by Police NPC: submit note first, then deliver the matching evidence item.
+"""
+
 import pygame
 import random
+from config.settings import *
 from game.entities.item import Item
-from config.settings import COLOR_BLACK
+from config.settings import COLOR_BLACK, ITEM_DESCRIPTIONS  # TODO 12.07 REVISE
 
 
 class StickyNote(Item):
-    """便签条 - 携带案件信息的特殊物品"""
+    """Case note item: static paper that stores the case target info."""
 
     def __init__(self, x, y, sought_item_type):
+        # Basic identity
         self.item_type = 'sticky_note'
         self.name = "Case Note"
-        self.keywords = ['note', 'clue', 'paper']
+        self.keywords = ['note', 'clue', 'paper']  # UI only
 
-        # 核心数据：原本顾客想要什么
-        self.sought_item_type = sought_item_type
+        # Core case data (Police reads these fields)
+        # what item type the customer wanted
+        self.sought_item_type = sought_item_type  
+        self.clue_text = self._generate_clue_text(sought_item_type)     # TODO 12.07 REVISE
+        self.case_id = random.randint(10, 99)
 
-        # 随机生成 4 位案件编号 (用于显示和剧情)
-        self.case_id = str(random.randint(1000, 9999))
-
-        self.width = 70
-        self.height = 80
+        # Size & position
+        self.width = 55
+        self.height = 70
         self.x = x
         self.y = y
 
-        # 物理属性 (轻飘飘的纸张)
-        self.friction = 0.85
-        self.vx = random.uniform(-2, 2)
-        self.vy = random.uniform(2, 4)
-        self.va = random.uniform(-5, 5)
-        self.angle = random.uniform(-10, 10)
+        # TODO Physics disabled: keep note static
+        self.friction = 0.0
+        self.vx = 0.0
+        self.vy = 0.0
+        self.va = 0.0
+        self.angle = 0.0
 
-        # 状态
+        # State flags kept for compatibility with the rest of the system
         self.is_selected = False
         self.in_storage = False
         self.on_conveyor = False
@@ -39,26 +48,48 @@ class StickyNote(Item):
         self.conveyor_start_offset = 0
         self.conveyor_vertical_offset = 0
 
+        # Build image and rect
         self._generate_image()
         self.rect = self.image.get_rect(center=(x, y))
 
+    # TODO 12.07 REVISE
+    def _generate_clue_text(self, item_type):
+        """Helper to pick a random keyword or category as the clue."""
+        data = ITEM_DESCRIPTIONS.get(item_type, {})
+        
+        # Get all the keywords and categories of this item.
+        keywords = data.get('keywords', [])
+        category = data.get('category')
+        
+        # Build a candidate pool
+        candidates = []
+        if keywords:
+            candidates.extend(keywords)
+        if category:
+            candidates.append(category)
+            
+        # Randomly select one feature as a clue.
+        return random.choice(candidates)
+
     def _generate_image(self):
-        # 1. 黄色背景
-        self.original_image = pygame.Surface((self.width, self.height))
-        self.original_image.fill((255, 240, 150))
+        """Generate a simple sticky note surface (no rotation)."""
+        # final image surface
+        self.image = pygame.Surface((self.width, self.height))  
+        self.image.fill(COLOR_YELLOW)  # yellow paper background
 
-        # 2. 红色 "CASE" 印章
-        font_small = pygame.font.SysFont("arial", 14, bold=True)
-        pygame.draw.rect(self.original_image, (200, 50, 50), (5, 5, 40, 20))
-        lbl = font_small.render("CASE", True, (255, 255, 255))
-        self.original_image.blit(lbl, (8, 6))
+        # Red "CASE" stamp label (top-left)
+        font_small = pygame.font.SysFont(FONT_PATH, 16, bold=True)
+        pygame.draw.rect(self.image, COLOR_RED, (5, 5, 40, 15))
+        lbl = font_small.render("CASE", True, COLOR_WHITE)
+        self.image.blit(lbl, (8, 6))
 
-        # 3. 绘制 4 位数字 ID
-        font_big = pygame.font.SysFont("arial", 26, bold=True)
-        text = font_big.render(self.case_id, True, COLOR_BLACK)
-        text_rect = text.get_rect(center=(self.width // 2, self.height // 2 + 5))
-        self.original_image.blit(text, text_rect)
+        # Case ID
+        font_id = pygame.font.SysFont(FONT_PATH, 16, bold=True)
+        id_text = font_id.render(f"ID: {self.case_id}", True, COLOR_BLACK)
+        self.image.blit(id_text, (10, 25))
 
-        # 4. 生成最终旋转图
-        self.image = self.original_image.copy()
-        self.image = pygame.transform.rotate(self.original_image, self.angle)
+        font_clue = pygame.font.SysFont(FONT_PATH, 24)
+
+        text = font_clue.render(self.clue_text, True, COLOR_BLACK)
+        text_rect = text.get_rect(center=(self.width // 2, self.height // 2 + 15))
+        self.image.blit(text, text_rect)

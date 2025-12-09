@@ -37,7 +37,7 @@ class MenuState:
     def _play_menu_music(self):
         """Play BGM"""
         try:
-            pygame.mixer.music.load('assets/sounds/bgm_menu.ogg')
+            pygame.mixer.music.load(SOUNDS['bgm_menu'])
             pygame.mixer.music.set_volume(0.7)
             pygame.mixer.music.play(-1)
         except Exception as e:

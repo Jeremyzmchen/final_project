@@ -14,6 +14,7 @@ from game.ui.popup import FloatingText
 from game.ui.button import Button
 from game.entities.sticky_note import StickyNote
 from game.entities.police import Police
+from game.entities.thief import Thief
 
 class GameplayState:
     def __init__(self, game_manager):
@@ -25,10 +26,7 @@ class GameplayState:
         self.game_manager = game_manager
         self.money = 0
         self.shift_time = 0
-        self.shift_duration = 180
-        # TODO: an extension for next update
-        #if 'money' in game_manager.game_data:
-        #    self.money = game_manager.game_data['money']
+        self.shift_duration = 120
 
         # 2. Initialize core game system
         self.inventory_manager = InventoryManager()
@@ -68,19 +66,28 @@ class GameplayState:
         )
         self.menu_btn = Button(1430, 835, 130, 50,
                                "BACK", None, style='transparent', font_size=42)
+        self.spray_btn = Button(
+            1470, 400, 50, 150,
+            None, None, style='transparent', image_path=ASSETS.get('item_spray')
+        )
 
         # 5. Initialize sound effect
         self.sfx_money = None
         self.sfx_deny = None
         try:
-            self.sfx_money = pygame.mixer.Sound('assets/sounds/sfx_money.wav')
-            self.sfx_deny = pygame.mixer.Sound('assets/sounds/sfx_deny.mp3')
-            self.sfx_click = pygame.mixer.Sound('assets/sounds/sfx_click.wav')
-            self.sfx_put = pygame.mixer.Sound('assets/sounds/sfx_put.wav')
-            self.sfx_click.set_volume(0.5)
-            self.sfx_put.set_volume(0.15)
+            self.sfx_money = pygame.mixer.Sound(SOUNDS['sfx_money'])
+            self.sfx_deny = pygame.mixer.Sound(SOUNDS['sfx_deny'])
+            self.sfx_click = pygame.mixer.Sound(SOUNDS['sfx_click'])
+            self.sfx_pick = pygame.mixer.Sound(SOUNDS['sfx_pick'])
+            self.sfx_drop = pygame.mixer.Sound(SOUNDS['sfx_drop'])
+            self.sfx_spray = pygame.mixer.Sound(SOUNDS['sfx_spray'])
+            
+            self.sfx_click.set_volume(0.8)
+            self.sfx_pick.set_volume(0.8)
+            self.sfx_drop.set_volume(0.2)
             self.sfx_money.set_volume(1.0)
             self.sfx_deny.set_volume(0.6)
+            self.sfx_spray.set_volume(1.0)
         except Exception as e:
             print(f"Failed to load the sfx: {e}")
 
@@ -91,11 +98,12 @@ class GameplayState:
         """
         Generate the first batch of items and customer
         """
-        self._spawn_item_on_conveyor()
-        self._spawn_customer()
+        self._spawn_item_on_conveyor()  # generate the first batch
+        self._spawn_customer()  # generate the first customer
+        # Play BGM
         try:
-            pygame.mixer.music.load('assets/sounds/bgm_play.mp3')
-            pygame.mixer.music.set_volume(0.3)
+            pygame.mixer.music.load(SOUNDS['bgm_menu'])
+            pygame.mixer.music.set_volume(0.35)
             pygame.mixer.music.play(-1)
         except Exception as e:
             print(f"Failed to play BGM: {e}")
@@ -133,6 +141,7 @@ class GameplayState:
         mouse = pygame.mouse.get_pos()
         self.call_police_btn.update(mouse)
         self.menu_btn.update(mouse)
+        self.spray_btn.update(mouse)
 
         # Calculate the offset to prevent drift
         if event.type == pygame.MOUSEMOTION and self.dragging_item:
@@ -148,17 +157,22 @@ class GameplayState:
                 self.game_manager.change_state(GameState.MENU)
                 return
 
+            # [新增] 处理喷雾按钮点击 (Spray Button Click)
+            if self.spray_btn.handle_click(mouse):
+                self._handle_spray_click()
+                return
+
             # -1.1. First handle: click 'call police' button
             if self.call_police_btn.handle_click(mouse):
                 self.sfx_click.play()
                 # Determine whether there is a police
                 has_police = any(isinstance(c, Police) for c in self.customers)
-                self._spawn_popup(mouse[0], mouse[1], "Police is here!",
-                                  COLOR_BLACK) if has_police else self._spawn_police()
+                self._spawn_popup(mouse[0], mouse[1] - 210, "Police is here!",
+                                  COLOR_WHITE) if has_police else self._spawn_police()
                 return
 
             # -1.2. Then handle: player click on 'don't have' button
-            clicked_customer = next((c for c in self.customers if c.is_arrived
+            clicked_customer = next((c for c in self.customers if c.is_arrived()
                                      and c.reject_button.handle_click(mouse)), None)
             if clicked_customer:
                 self.sfx_click.play()
@@ -167,7 +181,7 @@ class GameplayState:
 
             # -1.3. Then handle: player select items
             item = next((i for i in reversed(self.conveyor_items) if i.contains_point(mouse)), None)
-            self.sfx_click.play()
+            self.sfx_pick.play()
             # -1.3.1. Check item in conveyor belt first, then desk
             if item:
                 item.on_conveyor = False
@@ -184,12 +198,16 @@ class GameplayState:
 
         # 2. Release
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self.dragging_item:
-            self.sfx_put.play()
+            # dragging stop, release
+            self.sfx_drop.play()
             self.dragging_item.is_selected = False
+            # item rotate when put down
+            if not isinstance(self.dragging_item, StickyNote):
+                self.dragging_item.va = random.uniform(-5, 5)
 
             # -2.1. Check whether there is a npc receiving the item
             target_customer = next(
-                (c for c in self.customers if c.is_arrived and c.get_delivery_rect().collidepoint(mouse)), None)
+                (c for c in self.customers if c.is_arrived() and c.get_delivery_rect().collidepoint(mouse)), None)
 
             # -2.2. Check delivery process
             if not (target_customer and self._handle_delivery(target_customer, self.dragging_item)):
@@ -205,7 +223,8 @@ class GameplayState:
 
         # 2.Update spawn_item state
         self.item_spawn_timer += dt
-        if self.item_spawn_timer >= self.item_spawn_interval: self.item_spawn_timer = 0; self._spawn_item_on_conveyor()
+        if self.item_spawn_timer >= self.item_spawn_interval:
+            self.item_spawn_timer = 0; self._spawn_item_on_conveyor()
 
         # 3.Items on conveyor(batch, pause)
         # -3.1. Whether trigger pause or not
@@ -287,6 +306,7 @@ class GameplayState:
 
         # 4. Render UI
         self.call_police_btn.render(screen)     # call_police
+        self.spray_btn.render(screen)           # spray
         self.menu_btn.render(screen)            # back to menu
         for p in self.popups: p.render(screen)  # popups info
         self.hud.render(screen, self.money, self.shift_time, self.shift_duration)   # hud
@@ -322,8 +342,8 @@ class GameplayState:
             item.batch_id = self.current_batch_id
             if i == CONVEYOR_PAUSE_AT_INDEX:
                 item.is_pause_trigger = True
-            target_x = CONVEYOR_CENTER_X - 40
-            target_y = -150 - (i * 200)
+            target_x = CONVEYOR_CENTER_X - 60
+            target_y = -150 - (i * 120)
             item.set_position(target_x, target_y)
 
             # -1.4. Append to list
@@ -342,6 +362,14 @@ class GameplayState:
         empty_cst_space = [i for i, c in enumerate(self.customer_slots) if c is None]
         if not empty_cst_space: return
         idx = random.choice(empty_cst_space)
+
+        # [修改] 独立的小偷生成逻辑
+        # 使用 THIEF_SPAWN_PROB (例如 0.25)
+        if random.random() < THIEF_SPAWN_PROB:
+            t = Thief(CUSTOMER_SLOTS[idx])
+            self.customer_slots[idx] = t
+            self.customers.append(t)
+            return
 
         # 2. Intelligently assign item request to npc
         desk_items = self.inventory_manager.get_all_items()
@@ -369,7 +397,7 @@ class GameplayState:
         # 1. Check whether there is empty slot
         empty_plc_space = [i for i, slot in enumerate(self.customer_slots) if slot is None]
         if not empty_plc_space:
-            self._spawn_popup(WINDOW_WIDTH - 800, WINDOW_HEIGHT - 300, "No SPACE!", COLOR_RED)
+            self._spawn_popup(WINDOW_WIDTH - 100, WINDOW_HEIGHT - 480, "No SPACE!", COLOR_WHITE)
             return
         idx = empty_plc_space[0]
 
@@ -377,6 +405,36 @@ class GameplayState:
         p = Police(CUSTOMER_SLOTS[idx])
         self.customer_slots[idx] = p
         self.customers.append(p)
+
+    def _handle_spray_click(self):
+        """
+        玩家点击了喷雾按钮。
+        逻辑：全屏索敌，找到小偷并扣血。
+        """
+        # 播放音效
+        self.sfx_spray.play()
+
+        # 1. 查找场上是否有小偷
+        # (可能有多个，如果有多个就都喷，或者只喷第一个，这里逻辑是都喷)
+        thieves = [c for c in self.customers if isinstance(c, Thief)]
+
+        if not thieves:
+            # 没小偷还乱按 -> 惩罚
+            self.money += PENALTY_CLICK
+            self._spawn_popup(1500, 410, "No Thief!", COLOR_WHITE)
+            return
+
+        # 2. 对小偷造成伤害
+        for t in thieves:
+            is_dead = t.take_damage()  # 扣1血
+
+            if is_dead:
+                # 血量归零，赶走
+                self._spawn_popup(t.x, t.y + 50, "Begone!", COLOR_WHITE)
+                self._remove_customer(t)
+            else:
+                # 还没死，飘字提示剩余次数
+                self._spawn_popup(t.x, t.y + 50, "Hit!", COLOR_WHITE)
 
     def _handle_delivery(self, c, item):
         """Handle customer's delivery process"""
@@ -393,7 +451,7 @@ class GameplayState:
             return True
         else:
             self.money += PENALTY_WRONG
-            self._spawn_popup(c.x, c.y + 100, "Not this item!", COLOR_RED)
+            self._spawn_popup(c.x, c.y + 100, "Not this item!", COLOR_WHITE)
             self.sfx_deny.play()
             return False
 
@@ -484,7 +542,7 @@ class GameplayState:
 
         padding_x = 10; padding_y = 8
         width = name_surf.get_width() + padding_x * 2; height = name_surf.get_height() + padding_y * 2
-        x = mouse_pos[0] + 20; y = mouse_pos[1] + 20
+        x = mouse_pos[0] + 20; y = mouse_pos[1] - 30
         if x + width > WINDOW_WIDTH: x = mouse_pos[0] - width - 10
         if y + height > WINDOW_HEIGHT: y = mouse_pos[1] - height - 10
         if self.label_image:

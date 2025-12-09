@@ -19,6 +19,17 @@ class GameManager:
         self.clock = pygame.time.Clock()
         self.running = True
 
+        # 1. 隐藏系统默认光标
+        pygame.mouse.set_visible(False)
+        self.cursor_img = None
+        try:
+            path = ASSETS['cursor']
+            self.cursor_img = pygame.image.load(path)
+            self.cursor_img = pygame.transform.scale(self.cursor_img, (45, 45))
+        except Exception as e:
+            print(f"Failed to load custom cursor: {e}")
+            pygame.mouse.set_visible(True)
+
         self.states = {}
         self.current_state = None
 
@@ -76,4 +87,9 @@ class GameManager:
     def _render(self):
         if self.current_state in self.states:
             self.states[self.current_state].render(self.screen)
+
+        if self.cursor_img:
+            mx, my = pygame.mouse.get_pos()
+            self.screen.blit(self.cursor_img, (mx, my))
+
         pygame.display.flip()
