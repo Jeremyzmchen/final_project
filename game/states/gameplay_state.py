@@ -343,7 +343,7 @@ class GameplayState:
             if i == CONVEYOR_PAUSE_AT_INDEX:
                 item.is_pause_trigger = True
             target_x = CONVEYOR_CENTER_X - 60
-            target_y = -150 - (i * 120)
+            target_y = -150 - (i * 150)
             item.set_position(target_x, target_y)
 
             # -1.4. Append to list

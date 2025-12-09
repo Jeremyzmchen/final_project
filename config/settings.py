@@ -45,15 +45,17 @@ CUSTOMER_WAIT_TIME = 25.0    # Customer wait time
 
 # Conveyor setting
 CONVEYOR_SPEED = 400
-CONVEYOR_PAUSE_DURATION = 8.0
+CONVEYOR_PAUSE_DURATION = 10.0
 CONVEYOR_PAUSE_TRIGGER_Y = 270
 CONVEYOR_CENTER_X = 140      # Set center_x
 CONVEYOR_WIDTH = 180         # Set width
 
-ITEM_SPAWN_INTERVAL = 18.0
+ITEM_SPAWN_INTERVAL = 15.0
 ITEMS_PER_BATCH = 3
 ITEM_VERTICAL_OFFSETS = [30, 0, -30]
 CONVEYOR_PAUSE_AT_INDEX = 2
+ITEM_SIZE = (100, 100)  # default item size
+ITEM_GRID_SIZE = 130    # default grid size
 
 # 区域定义
 # 物品被拖到这里时，属于“已整理”，会被物理引擎接管（挤开效果）。
